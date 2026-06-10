@@ -18,9 +18,6 @@ def cv_show(name, img):
     cv2.waitKey(0)
     cv2.destroyAllWindows()
 
-# 获取特征点的坐标值
-
-
 def Get_Feature_Points(img, i_roi, num_f=0, area_test=False, AREA=0):
     """
     获取特征点的坐标值
@@ -83,6 +80,9 @@ def Get_Feature_Points(img, i_roi, num_f=0, area_test=False, AREA=0):
     cnts_0 = cv2.drawContours(img.copy(), cnts, 0, (0, 0, 255), 1)
     cnts_all = cv2.drawContours(img.copy(), cnts, -1, (0, 0, 255), 1)
     cnts_1 = cv2.drawContours(img.copy(), cnts, 1, (0, 0, 255), 1)
+    if num_f == test_f:
+        cv_show('t', cnts_0)
+
     # x最大，x最小，y最大, y最小的角点
     point = [0, 0]
     point1 = [img.shape[1], 0]
@@ -162,6 +162,7 @@ def Get_Feature_Points(img, i_roi, num_f=0, area_test=False, AREA=0):
     for p in corners:
         cv2.circle(img, (int(p[0]), int(p[1])), 4, (255, 255, 255), 1)
     Angular_Point = []
+    # cv_show('img', img)
 
     # 寻找距离三角形角点最近的亚像素级角点坐标
     point1_close = Proximity_Point1(point1, corners)
