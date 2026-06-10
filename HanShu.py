@@ -7,16 +7,19 @@ import numpy.fft as nf
 I_roi = []
 
 
-def cv_show(name, img):
+def cv_show(name, img, flag=0):
     """
     显示图片
     :param name: 显示框标题
     :param img: 图片
     :return: 无
     """
-    cv2.imshow(name, img)
-    cv2.waitKey(0)
-    cv2.destroyAllWindows()
+    if flag:
+        cv2.imshow(name, img)
+        cv2.waitKey(0)
+        cv2.destroyAllWindows()
+    else:
+        pass
 
 def Get_Feature_Points(img, i_roi, num_f=0, area_test=False, AREA=0):
     """
@@ -324,20 +327,17 @@ def Counter_Area(cnt):
 # ROI区域测试
 
 
-def ROI(img):
+def ROI(img, size):
     """
     找到roi区域
     :param img: 图片
     :return: roi的高度范围和宽度范围
     """
-    print(img.shape)
-    h = 70
-    w = 220
-    h1, w1 = 688, 490
+    # print(img.shape)
+    h, w, h1, w1 = size
     h2 = h1 + h
     w2 = w1 + w
     img = img[h1:h2, w1:w2]
-    print(img.shape)
     pt1 = (0, int((h2 - h1) / 2))
     pt1_ = (img.shape[1], int((h2 - h1) / 2))
     pt2 = (int((w2 - w1) / 2), 0)

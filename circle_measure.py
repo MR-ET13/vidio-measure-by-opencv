@@ -1,0 +1,251 @@
+
+import HanShu as H
+import rawpy
+import cv2
+import numpy as np
+from scipy.spatial import distance as dist
+import matplotlib.pyplot as plt
+
+
+# SIZE = (100, 100, 680, 500) # test_pic1.DNG
+SIZE = (200, 100, 830, 635) # test-v1.MOV # ROI尺寸
+CAL_RADIUS = 16.0 # 标定半径
+CENTER = (48, 98) # 标定圆心
+PERIMETER = 99 # 标定周长?
+THREAD_X = 30 # X方向偏移阈值
+START_FRAME = 850 # 开始帧
+END_FRAME = 1300 # 结束帧
+
+def read_dng(fn):
+    """
+    读取dng图片
+    :param fn: 图片路径
+    :return: img
+    """
+    with rawpy.imread(fn) as raw:
+        rgb = raw.postprocess()  # 得到 RGB numpy 数组
+    bgr = cv2.cvtColor(rgb, cv2.COLOR_RGB2BGR)  # 转 OpenCV 的 BGR
+    img_show = cv2.resize(bgr, (0, 0), fx=0.2, fy=0.2)
+    # print(img_show.shape)
+    # cv2.imshow("DNG", img_show)
+    # cv2.waitKey(0)
+    return img_show
+
+def circle_m(img):
+    """
+    返回图片中圆形轮廓的圆心坐标
+    :param img: 图片
+    :return: 圆心坐标
+    """
+    i_roi = H.ROI(img.copy(), SIZE)
+    img_roi = img[i_roi[0]:i_roi[1], i_roi[2]:i_roi[3]]
+    img_gay = cv2.cvtColor(img_roi, cv2.COLOR_BGR2GRAY) # 灰度处理
+
+    # 3. 滤波降噪（二选一，根据噪声情况）
+    # 高斯模糊：适合高斯噪声、画面整体偏噪（最常用）
+    blur = cv2.GaussianBlur(img_gay, (3, 3), 0)
+    # 中值滤波：适合椒盐噪声、白点/黑点杂点
+    # blur = cv2.medianBlur(img_gay, 3)
+
+    # 4. 二值化（二选一，根据光照）
+    # 固定阈值：光照均匀、背景简单
+    ret, binary = cv2.threshold(blur, 127, 255, cv2.THRESH_BINARY)
+    # 自适应阈值：光照不均、明暗差异大（强烈推荐工业/实拍图）
+    # binary = cv2.adaptiveThreshold(blur, 255,
+    #                                cv2.ADAPTIVE_THRESH_GAUSSIAN_C,
+    #                                cv2.THRESH_BINARY, 15, 3)
+
+    # 5. 形态学操作（轮廓优化：去小噪点、填补轮廓间隙）
+    # 定义结构元素
+    kernel = np.ones((3, 3), np.uint8)
+    # 开运算：先腐蚀再膨胀 → 去除**小白点噪声、细小干扰轮廓**
+    binary = cv2.morphologyEx(binary, cv2.MORPH_OPEN, kernel, iterations=1)
+    # 闭运算：先膨胀再腐蚀 → 填补**轮廓内部小孔、边缘断裂间隙**
+    binary = cv2.morphologyEx(binary, cv2.MORPH_CLOSE, kernel, iterations=1)
+
+    # 可选：反色（目标黑、背景白时使用）
+    # binary = cv2.bitwise_not(binary)
+
+    # 可视化每一步结果
+    H.cv_show("gray , blur , binary",
+              np.hstack((img_gay, blur, binary)))
+
+    cnts_init = cv2.findContours(
+        binary.copy(), cv2.RETR_LIST, cv2.CHAIN_APPROX_SIMPLE)[0] # 轮廓检测
+    # cnts = sorted(cnts_init, key=gravity_distance, reverse=False) # 重心确定标定面积
+    cnts = sorted(cnts_init, key=radius_distance, reverse=False) # 半径确定接近轮廓
+    cnt_all = cv2.drawContours(img_roi.copy(), cnts, -1, (0, 0, 255), 1) # 所有轮廓
+    cnt_0 = cv2.drawContours(img_roi.copy(), cnts, 0, (0, 0, 255), 1) # 第一匹配轮廓
+    cnt_1 = cv2.drawContours(img_roi.copy(), cnts, 1, (0, 0, 255), 1) # 第二匹配轮廓
+    H.cv_show('first_cnt  second_cnt  all_cnt', np.hstack((cnt_0, cnt_1, cnt_all)))
+
+    center0, radius0 = cv2.minEnclosingCircle(cnts[0])
+    center1, radius1 = cv2.minEnclosingCircle(cnts[1])
+    perimeter = cv2.arcLength(cnts[0], True)
+
+    if erro_distance(cnts[0]) > THREAD_X: # X方向偏移筛选
+        return center1
+    return center0
+
+def read_vidio(fn):
+    """
+    视频测量位移
+    :param fn: 视频路径
+    :return: None
+    """
+    vc = cv2.VideoCapture(fn) # 读取视频
+    start_frame = START_FRAME
+    end_frame = END_FRAME
+    delta_y = [] # y方向位移
+    delta_x = [] # x方向位移
+    while True:
+        if start_frame > 0: # 开始帧
+            ret, frame = vc.read()
+            center0 = circle_m(frame)
+            start_frame -= 1
+            end_frame -= 1
+            continue
+        elif end_frame > 0: # 结束帧
+            ret, frame = vc.read()
+            end_frame -= 1
+            if frame is None:
+                break
+            center = circle_m(frame)
+            delta_y.append(center[1] - center0[1])
+            delta_x.append(center[0] - center0[0])
+        else:
+            break
+
+    delta_y.insert(0, 0)
+    delta_x.insert(0, 0)
+    fps = 30
+    x = range(0, len(delta_y))
+    plt.subplot(211)
+    plt.plot(x, delta_y), plt.scatter(x, delta_y)
+
+    plt.subplot(212)
+    plt.plot(x, delta_x), plt.scatter(x, delta_x)
+
+    plt.show()
+    vc.release()
+
+def erro_frame(fn, index):
+    """
+    错误帧查看
+    :param fn: 视频路径
+    :param index: 错误帧数
+    :return: None
+    """
+    vc = cv2.VideoCapture(fn)
+    frame_num = 0
+    while True:
+        ret, frame = vc.read()
+        frame_num += 1
+        if frame_num < index:
+            continue
+        else:
+            circle_m(frame)
+            break
+
+def gravity_distance(cnt):
+    """
+    重心坐标距离
+    :param cnt: 轮廓
+    :return: 距离
+    """
+    x_sum = 0
+    y_sum = 0
+    for p in cnt:
+        x_sum += p[0][0]
+        y_sum += p[0][1]
+    P1 = [x_sum / len(cnt), y_sum / len(cnt)]
+    P2 = [SIZE[1] / 2, SIZE[0] / 2]
+    return dist.euclidean(P2, P1)
+
+def perimeter_distance(cnt):
+    """
+    周长距离
+    :param cnt: 轮廓
+    :return: 距离
+    """
+    per = cv2.arcLength(cnt, True)
+    return abs(per - PERIMETER)
+
+def radius_distance(cnt):
+    """
+    半径距离
+    :param cnt: 轮廓
+    :return: 距离
+    """
+    center, radius = cv2.minEnclosingCircle(cnt)
+    return abs(radius - CAL_RADIUS)
+
+def erro_distance(cnt):
+    """
+    错误帧处理
+    :param cnt: 轮廓
+    :return: 距离
+    """
+    center, radius = cv2.minEnclosingCircle(cnt)
+    return abs(center[0] - CENTER[0])
+
+def area_cal(fn):
+    """
+    c初始参数标定
+    :param fn: 视频路径
+    :return: None
+    """
+    vc = cv2.VideoCapture(fn)
+    start_frame = START_FRAME
+    while True:
+        ret, frame = vc.read()
+        start_frame -= 1
+        if start_frame > 0:
+            continue
+        else:
+            # H.ROI(frame, SIZE)
+            center0 = circle_m(frame)
+            break
+
+def crop_video(input_path, output_path, x, y, w, h):
+    """
+    视频裁剪
+    :param input_path: 视频路径
+    :param output_path: 输出路径
+    :param x: 位置x
+    :param y: 位置y
+    :param w: 裁剪宽度
+    :param h: 裁剪高度
+    :return: None
+    """
+    cap = cv2.VideoCapture(input_path)
+    if not cap.isOpened():
+        raise Exception("无法打开视频")
+
+    fps = cap.get(cv2.CAP_PROP_FPS)
+    fourcc = cv2.VideoWriter_fourcc(*'mp4v')  # 输出 mp4
+    out = cv2.VideoWriter(output_path, fourcc, fps, (w, h))
+
+    while True:
+        ret, frame = cap.read()
+        if not ret:
+            break
+        # 注意：numpy 是 [y:y+h, x:x+w]（高在前，宽在后）
+        crop = frame[y:y+h, x:x+w]
+        out.write(crop)
+
+    cap.release()
+    out.release()
+    cv2.destroyAllWindows()
+
+if __name__ == '__main__':
+    filename = "Pictures_File/circular_recognition_pic/test-v1.MOV"
+    outname = "Pictures_File/circular_recognition_pic/test-v1-out.MOV"
+
+    # read_dng(filename) # 读入dng文件
+    # circle_m(read_dng(filename)) # 圆形检测
+
+    read_vidio(filename) # 视频测量*****
+    # erro_frame(filename, START_FRAME+120) # 错误帧查看*****
+    # area_cal(filename) # 初始标定参数*****
+    # crop_video(filename, outname, SIZE[3], SIZE[2], SIZE[1], SIZE[0]) # 视频裁剪*****
