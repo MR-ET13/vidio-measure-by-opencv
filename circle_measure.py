@@ -15,6 +15,7 @@ PERIMETER = 99 # 标定周长?
 THREAD_X = 30 # X方向偏移阈值
 START_FRAME = 850 # 开始帧
 END_FRAME = 1300 # 结束帧
+L_PER_PIXEL = 7/(2 * 16.0) # 每像素的实际尺寸
 
 def read_dng(fn):
     """
@@ -81,11 +82,18 @@ def circle_m(img):
 
     center0, radius0 = cv2.minEnclosingCircle(cnts[0])
     center1, radius1 = cv2.minEnclosingCircle(cnts[1])
-    perimeter = cv2.arcLength(cnts[0], True)
+    perimeter0 = cv2.arcLength(cnts[0], True)
+    perimeter1 = cv2.arcLength(cnts[1], True)
+
+    center = (int(center0[0]), int(center0[1]))
+    radius = int(radius0)
+    cv2.circle(cnt_0, center, radius, (0, 255, 0), 2)
+    cv2.circle(cnt_0, center, 2, (255, 0, 0), -1)
+    H.cv_show("拟合圆", cnt_0)
 
     if erro_distance(cnts[0]) > THREAD_X: # X方向偏移筛选
-        return center1
-    return center0
+        return center1, radius1, perimeter1
+    return center0, radius0, perimeter0
 
 def read_vidio(fn):
     """
@@ -101,7 +109,7 @@ def read_vidio(fn):
     while True:
         if start_frame > 0: # 开始帧
             ret, frame = vc.read()
-            center0 = circle_m(frame)
+            center0, *_ = circle_m(frame)
             start_frame -= 1
             end_frame -= 1
             continue
@@ -110,7 +118,7 @@ def read_vidio(fn):
             end_frame -= 1
             if frame is None:
                 break
-            center = circle_m(frame)
+            center, *_ = circle_m(frame)
             delta_y.append(center[1] - center0[1])
             delta_x.append(center[0] - center0[0])
         else:
@@ -118,6 +126,10 @@ def read_vidio(fn):
 
     delta_y.insert(0, 0)
     delta_x.insert(0, 0)
+    delta_y = np.array(delta_y)
+    delta_x = np.array(delta_x)
+    delta_y *= L_PER_PIXEL
+    delta_x *= L_PER_PIXEL
     fps = 30
     x = range(0, len(delta_y))
     plt.subplot(211)
@@ -197,15 +209,27 @@ def area_cal(fn):
     """
     vc = cv2.VideoCapture(fn)
     start_frame = START_FRAME
+    # end_frame = START_FRAME + 1 # 单独标定
+    end_frame = END_FRAME # 取平均值，用于实际距离和像素转换，视频测试有没问题后执行
+    radiuss = []
+    perimeters = []
     while True:
-        ret, frame = vc.read()
-        start_frame -= 1
         if start_frame > 0:
+            ret, frame = vc.read()
+            start_frame -= 1
+            end_frame -= 1
             continue
-        else:
+        elif end_frame > 0:
+            ret, frame = vc.read()
+            end_frame -= 1
             # H.ROI(frame, SIZE)
-            center0 = circle_m(frame)
+            _, radius, perimeter = circle_m(frame)
+            radiuss.append(radius)
+            perimeters.append(perimeter)
+        else:
             break
+    print(f"平均半径：{np.mean(radiuss)} || 平均周长：{np.mean(perimeters)}")
+
 
 def crop_video(input_path, output_path, x, y, w, h):
     """
