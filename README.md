@@ -22,3 +22,24 @@
   - PERIMETER = 162.8 # 标定周长?
   - ALL_FRAME = 5189
   - L_PER_PIXEL = 7/(2 * 27.7) # 每像素的实际尺寸 
+- **"test3100.mp4"**
+  - SIZE = (461, 238, 0, 0) # test-v1.MOV # ROI尺寸 
+  - CAL_RADIUS = 26.2 # 标定半径
+  - CENTER = (116.2, 243.3) # 标定圆心
+  - PERIMETER = 168.6 # 标定周长?
+  - ALL_FRAME = 4976
+  - L_PER_PIXEL = 7/(2 * 29.7) # 每像素的实际尺寸
+- **"test3200.mp4"**
+  - SIZE = (499, 270, 0, 0) # test-v1.MOV # ROI尺寸 
+  - CAL_RADIUS = 26.5 # 标定半径
+  - CENTER = (146.1, 250.0) # 标定圆心
+  - PERIMETER = 171.7 # 标定周长?
+  - ALL_FRAME = 4853
+  - L_PER_PIXEL = 7/(2 * 30.7) # 每像素的实际尺寸
+- **"test3300.mp4"**
+  - SIZE = (480, 270, 0, 0) # test-v1.MOV # ROI尺寸 
+  - CAL_RADIUS = 26.6 # 标定半径
+  - CENTER = (141.9, 296.9) # 标定圆心
+  - PERIMETER = 171.7 # 标定周长?
+  - ALL_FRAME = 5545
+

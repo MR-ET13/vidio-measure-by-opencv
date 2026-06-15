@@ -11,20 +11,20 @@ import pandas as pd
 
 
 # SIZE = (100, 100, 680, 500) # test_pic1.DNG
-SIZE = (480, 216, 0, 0) # test-v1.MOV # ROI尺寸
-CAL_RADIUS = 25.3 # 标定半径
-CENTER = (105.6, 241.9) # 标定圆心
-PERIMETER = 162.8 # 标定周长?
-START_FRAME = 1 # 开始帧
-END_FRAME = 5000 # 结束帧
-ALL_FRAME = 5189
+SIZE = (480, 270, 0, 0) # test-v1.MOV # ROI尺寸
+CAL_RADIUS = 26.6 # 标定半径
+CENTER = (141.9, 296.9) # 标定圆心
+PERIMETER = 171.7 # 标定周长?
+START_FRAME = 5000 # 开始帧
+END_FRAME = 5500 # 结束帧
+ALL_FRAME = 5545
 FPS = 30
 LW = 1080
 LH = 1920
-t = 172.97
+T = 184.83
 
-THREAD_X = 30 # X方向偏移阈值
-L_PER_PIXEL = 7/(2 * 27.7) # 每像素的实际尺寸
+THREAD_X = 20 # X方向偏移阈值
+L_PER_PIXEL = 7/(2 * 30.8) # 每像素的实际尺寸
 
 def read_dng(fn):
     """
@@ -95,6 +95,9 @@ def circle_m(img):
     #     print(radius_distance(cnt_i))
     #     print(erro_distance(cnt_i))
 
+    # center0, radius0 = cv2.minEnclosingCircle(cnts[0])
+    # perimeter0 = cv2.arcLength(cnts[0], True)
+
     for cnt_i in cnts:
         if erro_distance(cnt_i) < THREAD_X:
             center, radius = cv2.minEnclosingCircle(cnt_i)
@@ -115,6 +118,7 @@ def read_vidio(fn):
     :param fn: 视频路径
     :return: None
     """
+    global CENTER
     vc = cv2.VideoCapture(fn) # 读取视频
     start_frame = START_FRAME
     end_frame = END_FRAME
@@ -133,6 +137,7 @@ def read_vidio(fn):
             if frame is None:
                 break
             center, *_ = circle_m(frame)
+            CENTER = center
             delta_y.append(center[1] - center0[1])
             delta_x.append(center[0] - center0[0])
         else:
@@ -163,6 +168,7 @@ def read_vidio(fn):
     # 导出excel
     df.to_excel("Pictures_File/circular_recognition_pic/data.xlsx", index=False)
 
+    print(f"幅度：{max(delta_y)-min(delta_y)}")
     plt.show()
     vc.release()
 
@@ -359,12 +365,12 @@ def remove_black_border(img, flag=0):
 
 
 if __name__ == '__main__':
-    filename = "Pictures_File/circular_recognition_pic/test3000-120.mp4"
+    filename = "Pictures_File/circular_recognition_pic/test3300-120/test3300.mp4"
 
     # read_dng(filename) # 读入dng文件
     # circle_m(read_dng(filename)) # 圆形检测
 
     # basic_info(filename)
-    read_vidio(filename) # 视频测量*****
-    # erro_frame(filename, START_FRAME+47) # 错误帧查看*****
     # area_cal(filename) # 初始标定参数*****
+    read_vidio(filename) # 视频测量*****
+    # erro_frame(filename, START_FRAME+1808) # 错误帧查看*****
