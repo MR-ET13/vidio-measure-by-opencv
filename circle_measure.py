@@ -5,17 +5,26 @@ import cv2
 import numpy as np
 from scipy.spatial import distance as dist
 import matplotlib.pyplot as plt
+from queue import Queue
+import threading
+import pandas as pd
 
 
 # SIZE = (100, 100, 680, 500) # test_pic1.DNG
-SIZE = (200, 100, 830, 635) # test-v1.MOV # ROI尺寸
-CAL_RADIUS = 16.0 # 标定半径
-CENTER = (48, 98) # 标定圆心
-PERIMETER = 99 # 标定周长?
+SIZE = (480, 216, 0, 0) # test-v1.MOV # ROI尺寸
+CAL_RADIUS = 25.3 # 标定半径
+CENTER = (105.6, 241.9) # 标定圆心
+PERIMETER = 162.8 # 标定周长?
+START_FRAME = 1 # 开始帧
+END_FRAME = 5000 # 结束帧
+ALL_FRAME = 5189
+FPS = 30
+LW = 1080
+LH = 1920
+t = 172.97
+
 THREAD_X = 30 # X方向偏移阈值
-START_FRAME = 850 # 开始帧
-END_FRAME = 1300 # 结束帧
-L_PER_PIXEL = 7/(2 * 16.0) # 每像素的实际尺寸
+L_PER_PIXEL = 7/(2 * 27.7) # 每像素的实际尺寸
 
 def read_dng(fn):
     """
@@ -38,8 +47,9 @@ def circle_m(img):
     :param img: 图片
     :return: 圆心坐标
     """
-    i_roi = H.ROI(img.copy(), SIZE)
-    img_roi = img[i_roi[0]:i_roi[1], i_roi[2]:i_roi[3]]
+    # i_roi = H.ROI(img.copy(), SIZE)
+    # img_roi = img[i_roi[0]:i_roi[1], i_roi[2]:i_roi[3]]
+    img_roi = remove_black_border(img)
     img_gay = cv2.cvtColor(img_roi, cv2.COLOR_BGR2GRAY) # 灰度处理
 
     # 3. 滤波降噪（二选一，根据噪声情况）
@@ -75,25 +85,29 @@ def circle_m(img):
         binary.copy(), cv2.RETR_LIST, cv2.CHAIN_APPROX_SIMPLE)[0] # 轮廓检测
     # cnts = sorted(cnts_init, key=gravity_distance, reverse=False) # 重心确定标定面积
     cnts = sorted(cnts_init, key=radius_distance, reverse=False) # 半径确定接近轮廓
+    # cnts = sorted(cnts_init, key=perimeter_distance, reverse=False)  # 周长确定接近轮廓
     cnt_all = cv2.drawContours(img_roi.copy(), cnts, -1, (0, 0, 255), 1) # 所有轮廓
     cnt_0 = cv2.drawContours(img_roi.copy(), cnts, 0, (0, 0, 255), 1) # 第一匹配轮廓
     cnt_1 = cv2.drawContours(img_roi.copy(), cnts, 1, (0, 0, 255), 1) # 第二匹配轮廓
-    H.cv_show('first_cnt  second_cnt  all_cnt', np.hstack((cnt_0, cnt_1, cnt_all)))
+    cnt_2 = cv2.drawContours(img_roi.copy(), cnts, 2, (0, 0, 255), 1)
+    H.cv_show('first_cnt  second_cnt  third_cnt all_cnt', np.hstack((cnt_0, cnt_1, cnt_2, cnt_all)))
+    # for cnt_i in cnts:
+    #     print(radius_distance(cnt_i))
+    #     print(erro_distance(cnt_i))
 
-    center0, radius0 = cv2.minEnclosingCircle(cnts[0])
-    center1, radius1 = cv2.minEnclosingCircle(cnts[1])
-    perimeter0 = cv2.arcLength(cnts[0], True)
-    perimeter1 = cv2.arcLength(cnts[1], True)
+    for cnt_i in cnts:
+        if erro_distance(cnt_i) < THREAD_X:
+            center, radius = cv2.minEnclosingCircle(cnt_i)
+            perimeter = cv2.arcLength(cnt_i, True)
+            scenter =(int(center[0]), int(center[1]))
+            sradius = int(radius)
+            cv2.circle(img_roi, scenter, sradius, (0, 255, 0), 2)
+            cv2.circle(img_roi, scenter, 2, (255, 0, 0), -1)
+            H.cv_show("拟合圆", img_roi)
+            return center, radius, perimeter
 
-    center = (int(center0[0]), int(center0[1]))
-    radius = int(radius0)
-    cv2.circle(cnt_0, center, radius, (0, 255, 0), 2)
-    cv2.circle(cnt_0, center, 2, (255, 0, 0), -1)
-    H.cv_show("拟合圆", cnt_0)
-
-    if erro_distance(cnts[0]) > THREAD_X: # X方向偏移筛选
-        return center1, radius1, perimeter1
-    return center0, radius0, perimeter0
+    print("轮廓错误")
+    return (0, 0), 0, 0
 
 def read_vidio(fn):
     """
@@ -128,15 +142,26 @@ def read_vidio(fn):
     delta_x.insert(0, 0)
     delta_y = np.array(delta_y)
     delta_x = np.array(delta_x)
+    x = range(0, len(delta_y))
+
     delta_y *= L_PER_PIXEL
     delta_x *= L_PER_PIXEL
     fps = 30
-    x = range(0, len(delta_y))
     plt.subplot(211)
-    plt.plot(x, delta_y), plt.scatter(x, delta_y)
+    plt.plot(x, delta_y)
+    # plt.scatter(x, delta_y)
 
     plt.subplot(212)
-    plt.plot(x, delta_x), plt.scatter(x, delta_x)
+    plt.plot(x, delta_x)
+    # plt.scatter(x, delta_x)
+
+    df = pd.DataFrame({
+        "x": list(x),
+        "delta_y": delta_y,
+        "delta_x": delta_x
+    })
+    # 导出excel
+    df.to_excel("Pictures_File/circular_recognition_pic/data.xlsx", index=False)
 
     plt.show()
     vc.release()
@@ -223,12 +248,13 @@ def area_cal(fn):
             ret, frame = vc.read()
             end_frame -= 1
             # H.ROI(frame, SIZE)
-            _, radius, perimeter = circle_m(frame)
+            center, radius, perimeter = circle_m(frame)
             radiuss.append(radius)
             perimeters.append(perimeter)
         else:
             break
     print(f"平均半径：{np.mean(radiuss)} || 平均周长：{np.mean(perimeters)}")
+    print(f"圆形坐标：{center}")
 
 
 def crop_video(input_path, output_path, x, y, w, h):
@@ -262,14 +288,83 @@ def crop_video(input_path, output_path, x, y, w, h):
     out.release()
     cv2.destroyAllWindows()
 
+def basic_info(fn):
+    cap = cv2.VideoCapture(fn)  # 0 代表摄像头，填路径为本地视频
+
+    # 1. 总帧数
+    total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+    # 2. 帧率
+    fps = cap.get(cv2.CAP_PROP_FPS)
+    # 3. 分辨率
+    width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+    height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+    # 4. 视频总时长(秒)
+    duration = total_frames / fps
+
+    print(f"总帧数: {total_frames}")
+    print(f"帧率: {fps:.2f}")
+    print(f"分辨率: {width} x {height}")
+    print(f"总时长: {duration:.2f} s")
+
+    cap.release()
+
+def read_frame(cap, q):
+    while True:
+        ret, frame = cap.read()
+        q.put((ret, frame))
+        if not ret:
+            break
+
+def crop_video_fast(input_path, output_path, x, y, w, h):
+    cap = cv2.VideoCapture(input_path)
+    src_w = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+    src_h = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+    if x + w > src_w or y + h > src_h:
+        raise ValueError("裁剪区域越界")
+
+    fps = cap.get(cv2.CAP_PROP_FPS)
+    fourcc = cv2.VideoWriter_fourcc(*'mp4v')
+    out = cv2.VideoWriter(output_path, fourcc, fps, (w, h))
+
+    q = Queue(maxsize=100)
+    # 子线程读帧，主线程处理+写入
+    t = threading.Thread(target=read_frame, args=(cap, q))
+    t.start()
+
+    while True:
+        ret, frame = q.get()
+        if not ret:
+            break
+        out.write(frame[y:y+h, x:x+w])
+
+    cap.release()
+    out.release()
+    t.join()
+
+def remove_black_border(img, flag=0):
+    # 转灰度
+    gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+    # 二值化：黑色(0)置0，其余内容置255
+    _, binary = cv2.threshold(gray, 10, 255, cv2.THRESH_BINARY)
+    # 获取所有非零点坐标
+    coords = np.column_stack(np.where(binary > 0))
+    # 有效区域边界
+    y_min, x_min = coords.min(axis=0)
+    y_max, x_max = coords.max(axis=0)
+    # 裁剪原图
+    crop_img = img[y_min:y_max+1, x_min:x_max+1]
+    if flag:
+        print(crop_img.shape)
+    return crop_img
+
+
 if __name__ == '__main__':
-    filename = "Pictures_File/circular_recognition_pic/test-v1.MOV"
-    outname = "Pictures_File/circular_recognition_pic/test-v1-out.MOV"
+    filename = "Pictures_File/circular_recognition_pic/test3000-120.mp4"
 
     # read_dng(filename) # 读入dng文件
     # circle_m(read_dng(filename)) # 圆形检测
 
+    # basic_info(filename)
     read_vidio(filename) # 视频测量*****
-    # erro_frame(filename, START_FRAME+120) # 错误帧查看*****
+    # erro_frame(filename, START_FRAME+47) # 错误帧查看*****
     # area_cal(filename) # 初始标定参数*****
-    # crop_video(filename, outname, SIZE[3], SIZE[2], SIZE[1], SIZE[0]) # 视频裁剪*****
