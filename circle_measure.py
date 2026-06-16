@@ -11,20 +11,20 @@ import pandas as pd
 
 
 # SIZE = (100, 100, 680, 500) # test_pic1.DNG
-SIZE = (480, 270, 0, 0) # test-v1.MOV # ROI尺寸
-CAL_RADIUS = 26.6 # 标定半径
-CENTER = (141.9, 296.9) # 标定圆心
-PERIMETER = 171.7 # 标定周长?
-START_FRAME = 5000 # 开始帧
-END_FRAME = 5500 # 结束帧
-ALL_FRAME = 5545
+SIZE = (480, 216, 0, 0) # test-v1.MOV # ROI尺寸
+CAL_RADIUS = 25.3 # 标定半径
+CENTER = (105.6, 241.9) # 标定圆心
+PERIMETER = 162.8 # 标定周长?
+START_FRAME = 4500 # 开始帧
+END_FRAME = 5100 # 结束帧
+ALL_FRAME = 5189
 FPS = 30
 LW = 1080
 LH = 1920
-T = 184.83
+T = 212.20
 
-THREAD_X = 20 # X方向偏移阈值
-L_PER_PIXEL = 7/(2 * 30.8) # 每像素的实际尺寸
+THREAD_X = 25 # X方向偏移阈值
+L_PER_PIXEL = 7/(2 * 27.7) # 每像素的实际尺寸
 
 def read_dng(fn):
     """
@@ -89,28 +89,45 @@ def circle_m(img):
     cnt_all = cv2.drawContours(img_roi.copy(), cnts, -1, (0, 0, 255), 1) # 所有轮廓
     cnt_0 = cv2.drawContours(img_roi.copy(), cnts, 0, (0, 0, 255), 1) # 第一匹配轮廓
     cnt_1 = cv2.drawContours(img_roi.copy(), cnts, 1, (0, 0, 255), 1) # 第二匹配轮廓
-    cnt_2 = cv2.drawContours(img_roi.copy(), cnts, 2, (0, 0, 255), 1)
-    H.cv_show('first_cnt  second_cnt  third_cnt all_cnt', np.hstack((cnt_0, cnt_1, cnt_2, cnt_all)))
+    H.cv_show('first_cnt  second_cnt  all_cnt', np.hstack((cnt_0, cnt_1, cnt_all)))
     # for cnt_i in cnts:
     #     print(radius_distance(cnt_i))
     #     print(erro_distance(cnt_i))
 
     # center0, radius0 = cv2.minEnclosingCircle(cnts[0])
     # perimeter0 = cv2.arcLength(cnts[0], True)
+    # center1, radius1 = cv2.minEnclosingCircle(cnts[1])
+    # perimeter1 = cv2.arcLength(cnts[1], True)
 
-    for cnt_i in cnts:
-        if erro_distance(cnt_i) < THREAD_X:
-            center, radius = cv2.minEnclosingCircle(cnt_i)
-            perimeter = cv2.arcLength(cnt_i, True)
+    min_cnt = 0
+    for i in range(len(cnts)):
+        if erro_distance(cnts[i]) < THREAD_X:
+            center, radius = cv2.minEnclosingCircle(cnts[i])
+            perimeter = cv2.arcLength(cnts[i], True)
             scenter =(int(center[0]), int(center[1]))
             sradius = int(radius)
             cv2.circle(img_roi, scenter, sradius, (0, 255, 0), 2)
             cv2.circle(img_roi, scenter, 2, (255, 0, 0), -1)
             H.cv_show("拟合圆", img_roi)
             return center, radius, perimeter
+        if erro_distance(cnts[i]) < erro_distance(cnts[min_cnt]):
+            min_cnt = i
 
     print("轮廓错误")
-    return (0, 0), 0, 0
+    centerm, radiusm = cv2.minEnclosingCircle(cnts[min_cnt])
+    perimeterm = cv2.arcLength(cnts[min_cnt], True)
+    scenter = (int(centerm[0]), int(centerm[0]))
+    sradius = int(radiusm)
+    cv2.circle(img_roi, scenter, sradius, (0, 255, 0), 2)
+    cv2.circle(img_roi, scenter, 2, (255, 0, 0), -1)
+    print("误差值*******************************")
+    for cnt_i in cnts:
+        print(radius_distance(cnt_i))
+        print(erro_distance(cnt_i))
+    print("*******************************误差值")
+    H.cv_show('first_cnt  second_cnt  all_cnt', np.hstack((cnt_0, cnt_1, cnt_all)), 1)
+    H.cv_show("拟合圆", img_roi, 1)
+    return centerm, radiusm, perimeterm
 
 def read_vidio(fn):
     """
@@ -365,7 +382,7 @@ def remove_black_border(img, flag=0):
 
 
 if __name__ == '__main__':
-    filename = "Pictures_File/circular_recognition_pic/test3300-120/test3300.mp4"
+    filename = "Pictures_File/circular_recognition_pic/test3000-120/test3000-120.mp4"
 
     # read_dng(filename) # 读入dng文件
     # circle_m(read_dng(filename)) # 圆形检测
@@ -373,4 +390,4 @@ if __name__ == '__main__':
     # basic_info(filename)
     # area_cal(filename) # 初始标定参数*****
     read_vidio(filename) # 视频测量*****
-    # erro_frame(filename, START_FRAME+1808) # 错误帧查看*****
+    # erro_frame(filename, START_FRAME+484) # 错误帧查看*****
