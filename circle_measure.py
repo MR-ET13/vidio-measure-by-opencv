@@ -380,6 +380,25 @@ def remove_black_border(img, flag=0):
         print(crop_img.shape)
     return crop_img
 
+def draw_result():
+    r = np.array([3000, 3100, 3200, 3300, 3400, 3500])/300
+    A2 = [17.6, 20.7, 29.4, 26.8, 24.1, 21.3]
+
+    # 2. 绘图
+    # 解决中文乱码
+    plt.rcParams["font.family"] = ["SimHei", "Microsoft YaHei", "SimSun"]
+    # 解决负号 "-" 显示方框
+    plt.rcParams["axes.unicode_minus"] = False
+
+    plt.plot(r, A2, color='red', marker='o', linestyle='--', label='曲线1')
+
+    # 3. 辅助设置
+    plt.title("转速-$M_2$振动幅度")  # 标题
+    plt.xlabel("$f$ / Hz")  # x标签
+    plt.ylabel("$A_2$ / mm")  # y标签
+    plt.legend()  # 显示图例
+    plt.grid(True, alpha=0.3)  # 网格
+    plt.show()  # 展示图片
 
 if __name__ == '__main__':
     filename = "Pictures_File/circular_recognition_pic/test3000-120/test3000-120.mp4"
@@ -389,5 +408,7 @@ if __name__ == '__main__':
 
     # basic_info(filename)
     # area_cal(filename) # 初始标定参数*****
-    read_vidio(filename) # 视频测量*****
+    # read_vidio(filename) # 视频测量*****
     # erro_frame(filename, START_FRAME+484) # 错误帧查看*****
+
+    draw_result()
